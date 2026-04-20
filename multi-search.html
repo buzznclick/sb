@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-Site Search Launcher</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f4f0;
+    --bg3: #eeecea;
+    --text: #1a1a18;
+    --text2: #6b6a66;
+    --border: rgba(0,0,0,0.12);
+    --border2: rgba(0,0,0,0.22);
+    --info-bg: #e6f1fb;
+    --info-border: #378add;
+    --info-text: #0c447c;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1c;
+      --bg2: #2a2a28;
+      --bg3: #333330;
+      --text: #f0ede8;
+      --text2: #9e9b96;
+      --border: rgba(255,255,255,0.12);
+      --border2: rgba(255,255,255,0.22);
+      --info-bg: #042c53;
+      --info-border: #378add;
+      --info-text: #b5d4f4;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg3);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .card {
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border);
+    padding: 1.75rem 2rem;
+    width: 100%;
+    max-width: 640px;
+  }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--text2); margin-bottom: 1.5rem; }
+  .search-row { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .search-row input {
+    flex: 1; height: 42px; padding: 0 14px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+    font-size: 15px; outline: none;
+  }
+  .search-row input:focus { box-shadow: 0 0 0 2px var(--info-border); }
+  .search-row button {
+    height: 42px; padding: 0 20px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+  }
+  .search-row button:hover { background: var(--bg2); }
+  .search-row button:active { transform: scale(0.98); }
+  .section-label {
+    font-size: 11px; font-weight: 500; color: var(--text2);
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .select-all-row { display: flex; gap: 6px; margin-bottom: 10px; }
+  .select-all-row button {
+    font-size: 12px; padding: 3px 10px;
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+    background: transparent; color: var(--text2); cursor: pointer;
+  }
+  .select-all-row button:hover { color: var(--text); background: var(--bg2); }
+  .engines-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 8px; margin-bottom: 1.5rem;
+  }
+  .engine-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--radius); cursor: pointer;
+    user-select: none; transition: border-color 0.12s;
+  }
+  .engine-card.selected {
+    border: 1.5px solid var(--info-border);
+    background: var(--info-bg);
+  }
+  .engine-card input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--info-border); flex-shrink: 0; cursor: pointer; }
+  .engine-label { font-size: 13px; color: var(--text); }
+  .engine-card.selected .engine-label { color: var(--info-text); font-weight: 500; }
+  .add-section { margin-bottom: 1rem; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row input {
+    height: 36px; padding: 0 10px;
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+    background: var(--bg2); color: var(--text);
+    font-size: 13px; outline: none;
+  }
+  .add-row input:focus { box-shadow: 0 0 0 2px var(--info-border); }
+  #custom-name { width: 130px; flex-shrink: 0; }
+  #custom-url { flex: 1; }
+  .add-row button {
+    height: 36px; padding: 0 14px; flex-shrink: 0;
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+    background: var(--bg2); color: var(--text2);
+    font-size: 13px; cursor: pointer;
+  }
+  .add-row button:hover { background: var(--bg); color: var(--text); }
+  .hint { font-size: 11px; color: var(--text2); margin-top: 6px; }
+  .status { font-size: 12px; color: var(--text2); margin-top: 1rem; min-height: 18px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Multi-site search</h1>
+  <p class="sub">Type a query, pick your sites, and open them all at once.</p>
+
+  <div class="search-row">
+    <input type="text" id="query" placeholder="Enter your search query..." />
+    <button onclick="launchSearch()">Search ↗</button>
+  </div>
+
+  <div class="section-label">Sites</div>
+  <div class="select-all-row">
+    <button onclick="toggleAll(true)">Select all</button>
+    <button onclick="toggleAll(false)">Deselect all</button>
+  </div>
+  <div class="engines-grid" id="engines-grid"></div>
+
+  <div class="add-section">
+    <div class="section-label">Add a custom site</div>
+    <div class="add-row">
+      <input type="text" id="custom-name" placeholder="Name (e.g. Reddit)" />
+      <input type="text" id="custom-url" placeholder="URL with {q} as the query placeholder" />
+      <button onclick="addCustom()">Add</button>
+    </div>
+    <p class="hint">Example URL: https://www.reddit.com/search/?q={q}</p>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const defaultEngines = [
+  { name: "Google", url: "https://www.google.com/search?q={q}", on: true },
+  { name: "DuckDuckGo", url: "https://duckduckgo.com/?q={q}", on: true },
+  { name: "Bing", url: "https://www.bing.com/search?q={q}", on: false },
+  { name: "YouTube", url: "https://www.youtube.com/results?search_query={q}", on: false },
+  { name: "Reddit", url: "https://www.reddit.com/search/?q={q}", on: false },
+  { name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search={q}", on: false },
+  { name: "GitHub", url: "https://github.com/search?q={q}", on: false },
+  { name: "Amazon", url: "https://www.amazon.com/s?k={q}", on: false },
+  { name: "eBay", url: "https://www.ebay.com/sch/i.html?_nkw={q}", on: false },
+  { name: "Perplexity", url: "https://www.perplexity.ai/search?q={q}", on: false },
+  { name: "Stack Overflow", url: "https://stackoverflow.com/search?q={q}", on: false },
+  { name: "Brave Search", url: "https://search.brave.com/search?q={q}", on: false },
+  { name: "Bikebug", url: "https://www.bikebug.com/search.php?search_query={q}", on: true },
+  { name: "Pushys", url: "https://www.pushys.com.au/search.php?search_query={q}", on: true },
+  { name: "MTB Direct", url: "https://www.mtbdirect.com.au/search?q={q}", on: true },
+];
+
+let engines = JSON.parse(localStorage.getItem('msl-engines') || 'null') || defaultEngines;
+
+function save() {
+  try { localStorage.setItem('msl-engines', JSON.stringify(engines)); } catch(e) {}
+}
+
+function render() {
+  const grid = document.getElementById('engines-grid');
+  grid.innerHTML = '';
+  engines.forEach((e, i) => {
+    const card = document.createElement('label');
+    card.className = 'engine-card' + (e.on ? ' selected' : '');
+    card.innerHTML = `<input type="checkbox" ${e.on ? 'checked' : ''} onchange="toggle(${i}, this.checked)" /><span class="engine-label">${e.name}</span>`;
+    grid.appendChild(card);
+  });
+}
+
+function toggle(i, val) {
+  engines[i].on = val;
+  save();
+  render();
+}
+
+function toggleAll(val) {
+  engines.forEach(e => e.on = val);
+  save();
+  render();
+}
+
+function addCustom() {
+  const name = document.getElementById('custom-name').value.trim();
+  const url = document.getElementById('custom-url').value.trim();
+  const st = document.getElementById('status');
+  if (!name || !url) { st.textContent = 'Please fill in both the name and URL.'; return; }
+  if (!url.includes('{q}')) { st.textContent = 'The URL must include {q} as a placeholder for the query.'; return; }
+  engines.push({ name, url, on: true });
+  save();
+  render();
+  document.getElementById('custom-name').value = '';
+  document.getElementById('custom-url').value = '';
+  st.textContent = `"${name}" added and selected.`;
+  setTimeout(() => st.textContent = '', 3000);
+}
+
+function launchSearch() {
+  const q = document.getElementById('query').value.trim();
+  const st = document.getElementById('status');
+  if (!q) { st.textContent = 'Please enter a search query.'; return; }
+  const selected = engines.filter(e => e.on);
+  if (!selected.length) { st.textContent = 'Please select at least one site.'; return; }
+  selected.forEach(e => window.open(e.url.replace('{q}', encodeURIComponent(q)), '_blank'));
+  st.textContent = `Opened ${selected.length} tab${selected.length > 1 ? 's' : ''} for "${q}"`;
+  setTimeout(() => st.textContent = '', 4000);
+}
+
+document.getElementById('query').addEventListener('keydown', e => {
+  if (e.key === 'Enter') launchSearch();
+});
+
+render();
+</script>
+</body>
+</html>
