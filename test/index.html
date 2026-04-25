@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ride Log · SRAM AXS vs BTC vs AUD/CNY</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: ui-monospace, 'Cascadia Code', 'Menlo', 'Courier New', monospace;
+    background: #f5f5f2;
+    color: #1a1a1a;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 2px solid #1a1a1a;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  header h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  header .subtitle { font-size: 11px; color: #888; }
+  nav { margin-left: auto; display: flex; }
+
+  nav button {
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    background: none;
+    border: 1px solid #d0d0d0;
+    padding: 7px 18px;
+    cursor: pointer;
+    color: #555;
+    transition: all 0.1s;
+  }
+
+  nav button:not(:last-child) { border-right: none; }
+  nav button.active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+  nav button:hover:not(.active) { background: #f0f0f0; }
+
+  /* PIN OVERLAY */
+  .pin-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(245,245,242,0.97);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+
+  .pin-box {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-top: 3px solid #1a1a1a;
+    padding: 32px 36px;
+    text-align: center;
+    width: 280px;
+  }
+
+  .pin-box h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #999;
+    margin-bottom: 20px;
+  }
+
+  .pin-dots { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; }
+
+  .pin-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #d0d0d0;
+    background: #fff;
+    transition: all 0.1s;
+  }
+
+  .pin-dot.filled { background: #1a1a1a; border-color: #1a1a1a; }
+  .pin-dot.error  { background: #dc2626; border-color: #dc2626; }
+
+  .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  .pin-key {
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+    padding: 14px;
+    cursor: pointer;
+    border-radius: 2px;
+    color: #1a1a1a;
+    transition: background 0.1s;
+  }
+
+  .pin-key:hover  { background: #f0f0f0; }
+  .pin-key:active { background: #e5e5e5; }
+  .pin-key.wide   { font-size: 12px; color: #999; grid-column: span 3; padding: 10px; }
+
+  /* SETUP BANNER */
+  .setup-banner {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-left: 4px solid #f59e0b;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+
+  .setup-banner h3 { font-size: 12px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+  .setup-banner p  { font-size: 11px; color: #78350f; line-height: 1.7; margin-bottom: 4px; }
+  .setup-banner code { background: #fef3c7; padding: 1px 5px; border-radius: 2px; font-size: 11px; }
+
+  .setup-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+
+  .setup-row input {
+    font-family: inherit;
+    font-size: 12px;
+    border: 1px solid #f59e0b;
+    background: #fff;
+    padding: 7px 10px;
+    color: #1a1a1a;
+    outline: none;
+    border-radius: 2px;
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .setup-row button {
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    background: #f59e0b;
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .setup-row button:hover { background: #d97706; }
+
+  /* STATUS BAR */
+  .status-bar {
+    font-size: 10px;
+    color: #aaa;
+    text-align: right;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    min-height: 16px;
+  }
+
+  .status-bar.ok      { color: #059669; }
+  .status-bar.err     { color: #dc2626; }
+  .status-bar.loading { color: #d97706; }
+
+  /* STAT CARDS */
+  .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+
+  .stat-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-top: 3px solid var(--accent);
+    padding: 12px 16px;
+  }
+
+  .stat-card .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; color: #999; margin-bottom: 5px; }
+  .stat-card .value { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1; }
+
+  /* CHART */
+  .chart-wrap { background: #fff; border: 1px solid #e0e0e0; padding: 24px 20px 16px; }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .chart-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
+  .chart-count { font-size: 10px; color: #aaa; }
+
+  /* RANGE SLIDERS */
+  .range-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #f0f0f0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .range-item label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .range-item label span { color: #2563eb; font-weight: 700; }
+
+  .range-item input[type=range] {
+    width: 100%;
+    accent-color: #2563eb;
+    display: block;
+  }
+
+  /* LEGEND */
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .legend-item .dot { width: 24px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .legend-item.hidden { opacity: 0.35; }
+
+  /* LOG TAB */
+  .log-grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
+  .form-card { background: #fff; border: 1px solid #e0e0e0; padding: 20px; }
+
+  .form-card h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #999;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .field { margin-bottom: 13px; }
+
+  .field label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 5px; }
+
+  .field input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    color: #1a1a1a;
+    background: #fafafa;
+    border: 1px solid #d8d8d8;
+    padding: 8px 10px;
+    outline: none;
+    border-radius: 2px;
+    transition: border-color 0.1s;
+  }
+
+  .field input:focus { border-color: #1a1a1a; background: #fff; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn-save {
+    width: 100%;
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    padding: 11px;
+    cursor: pointer;
+    margin-top: 6px;
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+
+  .btn-save:hover { background: #333; }
+  .btn-save:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* RIDE TABLE */
+  .ride-table-wrap { background: #fff; border: 1px solid #e0e0e0; overflow: hidden; }
+
+  .ride-table-wrap h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #999;
+    padding: 14px 18px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead th {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #aaa;
+    text-align: left;
+    padding: 8px 14px;
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
+    font-weight: 600;
+  }
+
+  tbody tr { border-bottom: 1px solid #f5f5f5; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fafafa; }
+  tbody td { padding: 9px 14px; color: #444; font-size: 12px; }
+
+  .del-btn { font-family: inherit; font-size: 10px; background: none; border: 1px solid #e0e0e0; color: #bbb; padding: 2px 8px; cursor: pointer; border-radius: 2px; }
+  .del-btn:hover { border-color: #e55; color: #e55; }
+
+  .empty-state { padding: 40px; text-align: center; color: #bbb; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 10px 20px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .toast.show { opacity: 1; }
+
+  main { padding: 28px; max-width: 1200px; margin: 0 auto; }
+
+  @media (max-width: 700px) {
+    .stat-row { grid-template-columns: repeat(3, 1fr); }
+    .log-grid { grid-template-columns: 1fr; }
+    .range-section { grid-template-columns: 1fr; }
+    .subtitle { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⛰ Ride Log</h1>
+    <div class="subtitle">SRAM AXS Shifts · Distance · Elevation · BTC · AUD/CNY</div>
+  </div>
+  <nav>
+    <button class="active" id="btn-chart" onclick="showTab('chart')">Chart</button>
+    <button id="btn-log" onclick="showTab('log')">Log Ride</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- PIN OVERLAY -->
+  <div class="pin-overlay" id="pin-overlay" style="display:none">
+    <div class="pin-box">
+      <h2>Enter PIN to log a ride</h2>
+      <div class="pin-dots">
+        <div class="pin-dot" id="pd0"></div>
+        <div class="pin-dot" id="pd1"></div>
+        <div class="pin-dot" id="pd2"></div>
+        <div class="pin-dot" id="pd3"></div>
+      </div>
+      <div class="pin-pad">
+        <button class="pin-key" onclick="pinKey('1')">1</button>
+        <button class="pin-key" onclick="pinKey('2')">2</button>
+        <button class="pin-key" onclick="pinKey('3')">3</button>
+        <button class="pin-key" onclick="pinKey('4')">4</button>
+        <button class="pin-key" onclick="pinKey('5')">5</button>
+        <button class="pin-key" onclick="pinKey('6')">6</button>
+        <button class="pin-key" onclick="pinKey('7')">7</button>
+        <button class="pin-key" onclick="pinKey('8')">8</button>
+        <button class="pin-key" onclick="pinKey('9')">9</button>
+        <button class="pin-key" onclick="pinKey('0')">0</button>
+        <button class="pin-key" onclick="pinBackspace()">⌫</button>
+        <button class="pin-key wide" onclick="pinCancel()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup banner — only shown until URL is saved -->
+  <div class="setup-banner" id="setup-banner" style="display:none">
+    <h3>⚙️ One-time setup — paste your Apps Script URL</h3>
+    <p>Deploy <code>apps-script.js</code> as a Google Apps Script Web App (see the instructions file).</p>
+    <p>Google will give you a URL like: <code>https://script.google.com/macros/s/XXXXXX/exec</code></p>
+    <p>Paste it below. It's saved in your browser only — never in the source code.</p>
+    <div class="setup-row">
+      <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <button onclick="saveScriptUrl()">Save &amp; Connect</button>
+    </div>
+  </div>
+
+  <!-- CHART TAB -->
+  <div id="tab-chart">
+    <div class="status-bar" id="status-chart"></div>
+
+    <div class="stat-row">
+      <div class="stat-card" style="--accent:#2563eb">
+        <div class="label">Rides</div>
+        <div class="value" id="stat-rides">—</div>
+      </div>
+      <div class="stat-card" style="--accent:#64748b">
+        <div class="label">Total km</div>
+        <div class="value" id="stat-km">—</div>
+      </div>
+      <div class="stat-card" style="--accent:#059669">
+        <div class="label">Total elev</div>
+        <div class="value" id="stat-elev">—</div>
+      </div>
+      <div class="stat-card" style="--accent:#2563eb">
+        <div class="label">Total shifts</div>
+        <div class="value" id="stat-shifts">—</div>
+      </div>
+      <div class="stat-card" style="--accent:#9333ea">
+        <div class="label">Avg shifts/km</div>
+        <div class="value" id="stat-avg">—</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-header">
+        <div class="chart-title">All metrics · by ride date — click legend to toggle</div>
+        <div class="chart-count" id="chart-count"></div>
+      </div>
+
+      <canvas id="mainChart" height="400" role="img" aria-label="Multi-line chart of ride metrics over time">Chart showing ride metrics over time.</canvas>
+
+      <!-- Range sliders -->
+      <div class="range-section">
+        <div class="range-item">
+          <label>From <span id="label-start"></span></label>
+          <input type="range" id="range-start" min="0" value="0" step="1">
+        </div>
+        <div class="range-item">
+          <label>To <span id="label-end"></span></label>
+          <input type="range" id="range-end" value="0" step="1">
+        </div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" style="display:none">
+    <div class="status-bar" id="status-log"></div>
+    <div class="log-grid">
+      <div class="form-card">
+        <h2>New Ride Entry</h2>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="f-date">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Distance (km)</label>
+            <input type="number" id="f-dist" placeholder="0.0" step="0.1" min="0">
+          </div>
+          <div class="field">
+            <label>Elevation (m)</label>
+            <input type="number" id="f-elev" placeholder="0" min="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Gear Shifts (AXS count)</label>
+          <input type="number" id="f-gear" placeholder="0" min="0">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>BTC Price (USD)</label>
+            <input type="number" id="f-btc" placeholder="0" min="0">
+          </div>
+          <div class="field">
+            <label>AUD → CNY Rate</label>
+            <input type="number" id="f-fx" placeholder="0.00" step="0.001" min="0">
+          </div>
+        </div>
+        <button class="btn-save" id="save-btn" onclick="saveRide()">+ Save Ride</button>
+      </div>
+
+      <div class="ride-table-wrap">
+        <h2>All Rides</h2>
+        <div id="ride-table-body"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── PIN ───────────────────────────────────────────────────────────────────────
+const CORRECT_PIN = '5555';
+const PIN_SESSION_KEY = 'ridelog_pin_ok';
+let pinBuffer = '';
+
+function isPinUnlocked() {
+  return sessionStorage.getItem(PIN_SESSION_KEY) === '1';
+}
+
+function unlockPin() {
+  sessionStorage.setItem(PIN_SESSION_KEY, '1');
+  document.getElementById('pin-overlay').style.display = 'none';
+  _showLogTab();
+}
+
+function pinKey(digit) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += digit;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    if (pinBuffer === CORRECT_PIN) {
+      unlockPin();
+      pinBuffer = '';
+    } else {
+      [0,1,2,3].forEach(i => {
+        const d = document.getElementById('pd' + i);
+        d.classList.remove('filled');
+        d.classList.add('error');
+      });
+      setTimeout(() => { pinBuffer = ''; updatePinDots(true); }, 600);
+    }
+  }
+}
+
+function pinBackspace() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+
+function pinCancel() {
+  pinBuffer = '';
+  updatePinDots();
+  document.getElementById('pin-overlay').style.display = 'none';
+  showTab('chart');
+}
+
+function updatePinDots(clearError) {
+  [0,1,2,3].forEach(i => {
+    const d = document.getElementById('pd' + i);
+    d.classList.toggle('filled', i < pinBuffer.length);
+    if (clearError) d.classList.remove('error');
+  });
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const URL_KEY = 'ridelog_script_url';
+
+function getScriptUrl() { return localStorage.getItem(URL_KEY) || ''; }
+
+function saveScriptUrl() {
+  const url = document.getElementById('script-url-input').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    toast("Doesn't look right — should start with https://script.google.com"); return;
+  }
+  localStorage.setItem(URL_KEY, url);
+  document.getElementById('setup-banner').style.display = 'none';
+  toast('Connected ✓');
+  loadAndRender();
+}
+
+function checkSetup() {
+  if (!getScriptUrl()) {
+    document.getElementById('setup-banner').style.display = 'block';
+    setStatus('chart', 'Not connected — see setup banner above', 'err');
+  }
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function apiRead() {
+  const res = await fetch(getScriptUrl() + '?action=read');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.rides || [];
+}
+
+async function apiWrite(ride) {
+  const res = await fetch(getScriptUrl(), {
+    method: 'POST',
+    body: JSON.stringify({ action: 'write', ...ride }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+}
+
+async function apiDelete(rowIndex) {
+  const res = await fetch(getScriptUrl(), {
+    method: 'POST',
+    body: JSON.stringify({ action: 'delete', rowIndex }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+}
+
+// ── CHART ─────────────────────────────────────────────────────────────────────
+const SERIES = [
+  { key:'dist',  label:'Distance (km)',   color:'#64748b', yAxis:'y1' },
+  { key:'elev',  label:'Elevation (m)',   color:'#059669', yAxis:'y2' },
+  { key:'gear',  label:'Gear Shifts',     color:'#2563eb', yAxis:'y3' },
+  { key:'btc',   label:'BTC Price (USD)', color:'#d97706', yAxis:'y4' },
+  { key:'fx',    label:'AUD/CNY Rate',    color:'#9333ea', yAxis:'y5' },
+];
+
+let chart = null;
+let hidden = {};
+let allRides = [];  // full sorted dataset kept in memory for slicing
+
+function fmtDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleString('default', { month: 'short', year: 'numeric' });
+}
+
+function buildChart(rides) {
+  const yHidden = { display: false, grid: { drawOnChartArea: false } };
+  const yAxes = {};
+  SERIES.forEach((s, i) => {
+    yAxes[s.yAxis] = { ...yHidden, position: i % 2 === 0 ? 'left' : 'right' };
+  });
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById('mainChart'), {
+    type: 'line',
+    data: {
+      labels: rides.map(r => r.date),
+      datasets: SERIES.map(s => ({
+        label: s.label,
+        data: rides.map(r => r[s.key]),
+        borderColor: s.color,
+        backgroundColor: s.color + '15',
+        borderWidth: 2,
+        pointRadius: rides.length > 50 ? 0 : 4,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: s.color,
+        pointBorderWidth: 2,
+        tension: 0.35,
+        yAxisID: s.yAxis,
+        hidden: !!hidden[s.key],
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 150 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff',
+          borderColor: '#d0d0d0',
+          borderWidth: 1,
+          titleColor: '#888',
+          bodyColor: '#1a1a1a',
+          titleFont: { family: 'ui-monospace, monospace', size: 10 },
+          bodyFont: { family: 'ui-monospace, monospace', size: 12 },
+          padding: 12,
+          callbacks: {
+            label: ctx => {
+              const s = SERIES[ctx.datasetIndex];
+              const v = ctx.parsed.y;
+              if (s.key === 'btc')  return '  ' + s.label + ': $' + v.toLocaleString();
+              if (s.key === 'fx')   return '  ' + s.label + ': ' + v.toFixed(3);
+              if (s.key === 'dist') return '  ' + s.label + ': ' + v.toFixed(1) + ' km';
+              if (s.key === 'elev') return '  ' + s.label + ': ' + v.toLocaleString() + ' m';
+              return '  ' + s.label + ': ' + v.toLocaleString();
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#f0f0f0' },
+          ticks: {
+            font: { family: 'ui-monospace, monospace', size: 10 },
+            color: '#aaa',
+            maxRotation: 35,
+            autoSkip: true,
+            maxTicksLimit: 12,
+          },
+        },
+        ...yAxes,
+      }
+    }
+  });
+}
+
+function buildLegend() {
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  SERIES.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (hidden[s.key] ? ' hidden' : '');
+    item.innerHTML = '<div class="dot" style="background:' + s.color + '"></div>' + s.label;
+    item.onclick = () => {
+      hidden[s.key] = !hidden[s.key];
+      item.classList.toggle('hidden');
+      const ds = chart.data.datasets.find(d => d.label === s.label);
+      if (ds) { ds.hidden = hidden[s.key]; chart.update(); }
+    };
+    el.appendChild(item);
+  });
+}
+
+function buildStats(rides) {
+  const totalDist = rides.reduce((a, r) => a + r.dist, 0);
+  const totalGear = rides.reduce((a, r) => a + r.gear, 0);
+  document.getElementById('stat-rides').textContent  = rides.length;
+  document.getElementById('stat-km').textContent     = totalDist.toFixed(1);
+  document.getElementById('stat-elev').textContent   = rides.reduce((a, r) => a + r.elev, 0).toLocaleString() + 'm';
+  document.getElementById('stat-shifts').textContent = totalGear.toLocaleString();
+  document.getElementById('stat-avg').textContent    = totalDist ? (totalGear / totalDist).toFixed(1) : '0.0';
+}
+
+// ── RANGE SLIDERS ─────────────────────────────────────────────────────────────
+function initSliders(total) {
+  const rs = document.getElementById('range-start');
+  const re = document.getElementById('range-end');
+  rs.max = total - 1;
+  re.max = total - 1;
+  rs.value = 0;
+  re.value = total - 1;
+  updateSliderLabels(0, total - 1);
+}
+
+function updateSliderLabels(s, e) {
+  document.getElementById('label-start').textContent = allRides[s] ? fmtDate(allRides[s].date) : '';
+  document.getElementById('label-end').textContent   = allRides[e] ? fmtDate(allRides[e].date) : '';
+  const count = e - s + 1;
+  document.getElementById('chart-count').textContent = 'Showing ' + count + ' ride' + (count !== 1 ? 's' : '');
+}
+
+function applySlice() {
+  let s = parseInt(document.getElementById('range-start').value);
+  let e = parseInt(document.getElementById('range-end').value);
+  if (s > e) {
+    // whichever slider moved, push the other
+    const moved = this === document.getElementById('range-start') ? 'start' : 'end';
+    if (moved === 'start') { e = s; document.getElementById('range-end').value = e; }
+    else                   { s = e; document.getElementById('range-start').value = s; }
+  }
+  const slice = allRides.slice(s, e + 1);
+  chart.data.labels = slice.map(r => r.date);
+  SERIES.forEach((ser, i) => { chart.data.datasets[i].data = slice.map(r => r[ser.key]); });
+  chart.data.datasets.forEach(ds => { ds.pointRadius = slice.length > 50 ? 0 : 4; });
+  chart.update('none');
+  buildStats(slice);
+  updateSliderLabels(s, e);
+}
+
+// ── TABLE ─────────────────────────────────────────────────────────────────────
+function buildTable(rides) {
+  const wrap = document.getElementById('ride-table-body');
+  if (!rides.length) { wrap.innerHTML = '<div class="empty-state">No rides logged yet</div>'; return; }
+  const sorted = [...rides].sort((a, b) => b.date.localeCompare(a.date));
+  wrap.innerHTML = '<table><thead><tr><th>Date</th><th>km</th><th>Elev</th><th>Shifts</th><th>BTC USD</th><th>AUD/CNY</th><th></th></tr></thead><tbody>' +
+    sorted.map(r =>
+      '<tr><td>' + r.date + '</td><td>' + r.dist.toFixed(1) + '</td><td>' + r.elev.toLocaleString() + 'm</td><td>' +
+      r.gear.toLocaleString() + '</td><td>$' + r.btc.toLocaleString() + '</td><td>' + r.fx.toFixed(3) +
+      '</td><td><button class="del-btn" onclick="deleteRide(' + r.rowIndex + ')">✕</button></td></tr>'
+    ).join('') + '</tbody></table>';
+}
+
+// ── ACTIONS ───────────────────────────────────────────────────────────────────
+async function loadAndRender() {
+  if (!getScriptUrl()) return;
+  setStatus('chart', 'Loading from Google Sheets...', 'loading');
+  try {
+    const rides = await apiRead();
+    allRides = [...rides].sort((a, b) => a.date.localeCompare(b.date));
+    buildStats(allRides);
+    buildChart(allRides);
+    buildLegend();
+    buildTable(rides);
+    initSliders(allRides.length);
+
+    // Wire up sliders after chart exists
+    document.getElementById('range-start').oninput = applySlice;
+    document.getElementById('range-end').oninput   = applySlice;
+
+    setStatus('chart', rides.length + ' ride' + (rides.length !== 1 ? 's' : '') + ' · updated ' + new Date().toLocaleTimeString(), 'ok');
+  } catch(e) {
+    setStatus('chart', 'Could not load data — check Apps Script URL and deployment', 'err');
+    console.error(e);
+  }
+}
+
+async function saveRide() {
+  const date = document.getElementById('f-date').value;
+  const dist = parseFloat(document.getElementById('f-dist').value);
+  const elev = parseInt(document.getElementById('f-elev').value);
+  const gear = parseInt(document.getElementById('f-gear').value);
+  const btc  = parseInt(document.getElementById('f-btc').value);
+  const fx   = parseFloat(document.getElementById('f-fx').value);
+
+  if (!date || isNaN(dist) || isNaN(elev) || isNaN(gear) || isNaN(btc) || isNaN(fx)) {
+    toast('Fill in all fields'); return;
+  }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  setStatus('log', 'Saving to Google Sheets...', 'loading');
+
+  try {
+    await apiWrite({ date, dist, elev, gear, btc, fx });
+    ['f-dist','f-elev','f-gear','f-btc','f-fx'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-date').valueAsDate = new Date();
+    toast('Saved to Google Sheets ✓');
+    setStatus('log', 'Saved ✓', 'ok');
+    await loadAndRender();
+  } catch(e) {
+    toast('Save failed — see console');
+    setStatus('log', 'Error saving — check Apps Script deployment', 'err');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = '+ Save Ride';
+  }
+}
+
+async function deleteRide(rowIndex) {
+  if (!confirm('Delete this ride from Google Sheets?')) return;
+  setStatus('log', 'Deleting...', 'loading');
+  try {
+    await apiDelete(rowIndex);
+    toast('Deleted ✓');
+    await loadAndRender();
+    setStatus('log', '', '');
+  } catch(e) {
+    toast('Delete failed — see console');
+    setStatus('log', 'Error deleting', 'err');
+    console.error(e);
+  }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  if (tab === 'log' && !isPinUnlocked()) {
+    pinBuffer = '';
+    updatePinDots(true);
+    document.getElementById('pin-overlay').style.display = 'flex';
+    return;
+  }
+  ['chart','log'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('btn-' + t).classList.toggle('active', t === tab);
+  });
+}
+
+function _showLogTab() {
+  ['chart','log'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === 'log' ? '' : 'none';
+    document.getElementById('btn-' + t).classList.toggle('active', t === 'log');
+  });
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function setStatus(tab, msg, cls) {
+  const el = document.getElementById('status-' + tab);
+  if (el) { el.textContent = msg; el.className = 'status-bar' + (cls ? ' ' + cls : ''); }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.getElementById('f-date').valueAsDate = new Date();
+checkSetup();
+loadAndRender();
+</script>
+</body>
+</html>
